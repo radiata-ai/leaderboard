@@ -309,53 +309,73 @@ def save_per_image_data_split(
     split_name: str,
     split_res: dict,
     base_dir: str,
-    save_input_recon: bool = False  # <--- new optional param, default=False
+    save_input_recon: bool = False
 ):
     """
     Saves per-image data & CSV. 
-    If `save_input_recon=False`, we skip writing .npz files for input/recon and leave paths blank.
+    If `save_input_recon=False`, or if we don't have input_images_array in split_res,
+    we skip writing .npz files for input/recon and leave paths blank.
     """
+    import os
+    import numpy as np
+    import pandas as pd
+
     split_dir = os.path.join(base_dir, split_name)
-    input_dir = os.path.join(split_dir, "input_images")
-    recon_dir = os.path.join(split_dir, "recon_images")
     os.makedirs(split_dir, exist_ok=True)  # ensure base folder
 
-    if save_input_recon:
+    # Check if we have input_images_array and recon_images_array
+    if "input_images_array" in split_res and "recon_images_array" in split_res:
+        input_images_array = split_res["input_images_array"]
+        recon_images_array = split_res["recon_images_array"]
+        N = input_images_array.shape[0]
+    else:
+        # We're in a precomputed embeddings scenario => no images
+        input_images_array = None
+        recon_images_array = None
+        # get N from embeddings or any known list
+        if "embeddings" in split_res:
+            N = split_res["embeddings"].shape[0]
+        else:
+            # fallback: from one of the metadata lists like ages
+            N = len(split_res["ages"])
+
+    # If we do have arrays and user wants to save them
+    input_dir = os.path.join(split_dir, "input_images")
+    recon_dir = os.path.join(split_dir, "recon_images")
+    if save_input_recon and input_images_array is not None:
         os.makedirs(input_dir, exist_ok=True)
         os.makedirs(recon_dir, exist_ok=True)
 
+    # We'll always save a .npz with embeddings (if present)
     embeddings_file = os.path.join(split_dir, f"{split_name}_embeddings.npz")
+    if "embeddings" in split_res:
+        np.savez(embeddings_file, embeddings=split_res["embeddings"])
+
     records = []
-    N = split_res["input_images_array"].shape[0]
-
     for i in range(N):
-        # We can track optional meta in the same loop or
-        # you might have them in split_res["some_array"] if you stored them earlier.
-
-        if save_input_recon:
+        # If we have input/recon arrays, write them; otherwise leave blank
+        if save_input_recon and input_images_array is not None:
             input_path = os.path.join(input_dir, f"input_image_{i+1:06d}.npz")
             recon_path = os.path.join(recon_dir, f"recon_image_{i+1:06d}.npz")
-            np.savez(input_path, data=split_res["input_images_array"][i])
-            np.savez(recon_path, data=split_res["recon_images_array"][i])
+            np.savez(input_path, data=input_images_array[i])
+            np.savez(recon_path, data=recon_images_array[i])
         else:
             input_path = ""
             recon_path = ""
 
-        # "pred_age", "pred_sex", "pred_diagnosis", "pred_age_mae", "pred_sex_correct",
-        # "pred_diagnosis_correct", "study", "radiata_id"
-        # If they're not in split_res, set placeholders or you must fill them somewhere else.
-        # We'll do safe .get(...) calls:
         row = {
             "idx": i + 1,
             "input_image_path": input_path,
             "recon_image_path": recon_path,
-            "age": split_res["ages"][i],
-            "sex": split_res["sexes"][i],
-            "diagnosis": split_res["diags"][i],
-            "l1_loss": split_res["l1_per_image"][i],
-            "perceptual_loss": split_res["perceptual_per_image"][i],
-            "ssim": split_res["ssim_per_image"][i],
-            "psnr": split_res["psnr_per_image"][i],
+            # These fields come from arrays or fallback placeholders
+            "age": split_res.get("ages", [""]*N)[i],
+            "sex": split_res.get("sexes", [""]*N)[i],
+            "diagnosis": split_res.get("diags", [""]*N)[i],
+            "l1_loss": split_res.get("l1_per_image", [""]*N)[i],
+            "perceptual_loss": split_res.get("perceptual_per_image", [""]*N)[i],
+            "ssim": split_res.get("ssim_per_image", [""]*N)[i],
+            "psnr": split_res.get("psnr_per_image", [""]*N)[i],
+
             "pred_age": split_res.get("pred_age", [""]*N)[i],
             "pred_sex": split_res.get("pred_sex", [""]*N)[i],
             "pred_diagnosis": split_res.get("pred_diagnosis", [""]*N)[i],
@@ -368,13 +388,10 @@ def save_per_image_data_split(
         }
         records.append(row)
 
-    # Save embeddings in one file => shape (N, latent_dim)
-    np.savez(embeddings_file, embeddings=split_res["embeddings"])
-
     df = pd.DataFrame(records)
     csv_file = os.path.join(split_dir, f"{split_name}_metadata.csv")
     df.to_csv(csv_file, index=False)
-    print(f"Saved {split_name} data to {split_dir}")
+    print(f"[INFO] Saved {split_name} data to {split_dir}")
 
 
 def evaluate_autoencoder_on_dataset(
@@ -705,7 +722,11 @@ def build_split_results(ds_split, data_all):
     """
     Create a results dict with 'embeddings', 'ages', 'sexes', 'diags', etc.
     from the precomputed data (data_all).
-    We'll match each ds_split item by e.g. 'nii_filepath' and fill arrays/lists.
+    We'll match each ds_split item by `radiata_id` (found in metadata).
+    
+    Requirements:
+      - Each item in `data_all` must have: item["metadata"]["radiata_id"] (unique).
+      - Each HF dataset record in `ds_split` must have record["metadata"]["radiata_id"].
     """
     import numpy as np
 
@@ -716,41 +737,51 @@ def build_split_results(ds_split, data_all):
     study_list = []
     radiata_list = []
 
-    # Convert data_all into a dict keyed by e.g. 'nii_filepath' if you want quick lookup
+    # Convert data_all into a dict keyed by radiata_id
     lookup = {}
     for item in data_all:
-        path = item["nii_filepath"]
-        lookup[path] = item  # or handle duplicates if needed
+        # Must have item["metadata"]["radiata_id"]
+        rid = item["metadata"].get("radiata_id")
+        if rid is None:
+            raise ValueError("No 'radiata_id' found in data_all item['metadata']. Can't join.")
+        # store entire item so we can retrieve 'embedding'
+        lookup[rid] = item
 
+    # For each record in ds_split, find matching item in data_all
     for record in ds_split:
-        path = record["nii_filepath"]
         meta = record["metadata"]
+        rid = meta.get("radiata_id")
+        if rid is None:
+            raise ValueError("No 'radiata_id' found in ds_split record['metadata']. Can't match to data_all.")
+
+        item = lookup.get(rid)
+        if item is None:
+            raise ValueError(f"No precomputed embedding found for radiata_id={rid} in data_all.")
+
+        # gather embedding
+        embeddings_list.append(item["embedding"])
+        
+        # gather typical metadata columns
         age = meta["age"]
         sex = meta["sex"]
         diag = meta["clinical_diagnosis"]
         study = meta.get("study", "")
-        radiata_id = meta.get("radiata_id", "")
-
-        # find the precomputed item
-        item = lookup.get(path, None)
-        if item is None:
-            raise ValueError(f"No precomputed embedding found for {path} in data_all.")
-
-        embeddings_list.append(item["embedding"])
+        # store them
         ages_list.append(age)
         sexes_list.append(sex)
         diags_list.append(diag)
         study_list.append(study)
-        radiata_list.append(radiata_id)
+        radiata_list.append(rid)
 
     res = {}
+    # convert embeddings to float32 array
     res["embeddings"] = np.array(embeddings_list, dtype=np.float32)
     res["ages"] = ages_list
     res["sexes"] = sexes_list
     res["diags"] = diags_list
     res["study"] = study_list
     res["radiata_id"] = radiata_list
-    # We'll let the script set the rest (l1, percept, etc.) to zero or skip them.
+    # The script sets L1/percept/etc. to zero or skip them if we're in precomputed mode.
 
     return res
 
@@ -783,94 +814,91 @@ def combine_and_store_embeddings(ds_train, ds_val, ds_test, train_res, val_res, 
 
 
 def generate_hf_compatible_embeddings_from_features(
-    features_file: str,
-    output_file: str,
-    id_column: str = "nii_filepath",
-    metadata_columns: list = None,
-    embedding_columns: list = None
+    metadata_csv: str,
+    output_file: str
 ):
     """
-    Load a CSV or JSON with precomputed features for each scan, then produce
-    an HF-compatible embeddings JSON (like 'hf_compatible_embeddings.json').
+    Parse `metadata_csv`, which must have at least a "t1_local_path" column,
+    for each row's T1 file. Then:
+      1) Derive the IDPs JSON path by replacing the T1 .nii.gz suffix with _IDPs.json,
+         or constructing it from the folder structure.
+      2) Load the numeric keys from that JSON as the "embedding" (335 values).
+      3) Store the rest of the CSV columns in "metadata" except for "t1_local_path".
+      4) Write an array of dicts to `output_file` in HF-compatible format:
+         [
+           {
+             "id": <row_index>,
+             "nii_filepath": <the t1_local_path>,
+             "metadata": {...all other columns...},
+             "embedding": [...the numeric IDP values...]
+           },
+           ...
+         ]
 
-    Args:
-        features_file (str): path to the CSV or JSON file containing rows of data.
-                             Must have at least one column (e.g. "nii_filepath") to identify each scan.
-        output_file (str): path of the HF-compatible JSON to write out.
-        id_column (str): which column in 'features_file' identifies the scan path. Defaults to "nii_filepath".
-        metadata_columns (list): which columns to store in "metadata" (a dict).
-                                 If None, no extra metadata is stored.
-        embedding_columns (list): which columns to treat as the embedding vector.
-                                  If None, we treat ALL numeric columns (except id_column, metadata) as embedding.
-
-    Returns:
-        None. Writes a JSON array of dicts to `output_file`, each dict containing:
-          {
-            "nii_filepath": ...,
-            "metadata": {...},
-            "embedding": [...],
-            "id": int
-          }
-        This format can be loaded by `load_hf_compatible_embeddings(...)` in model_evals.py,
-        skipping model inference.
+    This JSON can be used with `--use_precomputed_embeddings` in model_evals.py,
+    skipping the forward pass, but still linking each scan's metadata & IDPs-based embedding.
     """
+    import os
     import json
     import pandas as pd
-    import numpy as np
-    import os
+    import collections
 
-    # 1) Load the file
-    if features_file.endswith(".csv"):
-        df = pd.read_csv(features_file)
-    elif features_file.endswith(".json"):
-        df = pd.read_json(features_file)
-    else:
-        raise ValueError("features_file must be .csv or .json")
+    # 1) Read metadata CSV
+    df = pd.read_csv(metadata_csv)
+    if "t1_local_path" not in df.columns:
+        raise ValueError("metadata_csv must contain 't1_local_path' column.")
 
-    if id_column not in df.columns:
-        raise ValueError(f"Missing required '{id_column}' column in {features_file}.")
-
-    # 2) Decide which columns go to "metadata" dict, which go to "embedding"
-    if metadata_columns is None:
-        metadata_columns = []
-    if embedding_columns is None:
-        # By default, treat any numeric columns (excluding the id_column and metadata_columns) as embedding
-        # Filter out non-numeric columns, plus the id/metadata columns
-        candidate_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        exclude_set = set([id_column] + metadata_columns)
-        embedding_columns = [c for c in candidate_cols if c not in exclude_set]
-
-    # Validate
-    missing_cols = [c for c in embedding_columns if c not in df.columns]
-    if missing_cols:
-        raise ValueError(f"Missing embedding columns in data: {missing_cols}")
-
-    # 3) Build the JSON records
     records = []
     for i, row in df.iterrows():
-        record = {}
-        record["id"] = i
-        record["nii_filepath"] = row[id_column]
+        t1_path = row["t1_local_path"]  # e.g. DLBS/sub-XXXX/ses-01/anat/msub-XXXX_ses-01_T1w_brain_affine_mni.nii.gz
 
-        # Build the 'metadata' dict from the specified columns
+        # 2) Construct the IDPs.json path
+        # Example logic: replace "_T1w_brain_affine_mni.nii.gz" with "_IDPs.json"
+        # Adjust if your naming or folder structure is different.
+        if not t1_path.endswith(".nii.gz"):
+            raise ValueError(f"Row {i}: 't1_local_path' does not end with .nii.gz => {t1_path}")
+
+        idps_path = t1_path.replace("_T1w_brain_affine_mni.nii.gz", "_IDPs.json")
+
+        # Potentially prepend a root folder if needed, e.g. /Users/jbrown2/company_local/brain-structure/
+        # If your CSV paths are already absolute, skip this step
+        # For example:
+        # root_dir = "/Users/jbrown2/company_local/brain-structure/"
+        # idps_path = os.path.join(root_dir, idps_path)
+
+        if not os.path.exists(idps_path):
+            raise FileNotFoundError(f"IDPs file not found at {idps_path}")
+
+        # 3) Load the IDPs => 335 numeric values, sorted by key
+        with open(idps_path, "r") as f:
+            idps_data = json.load(f, object_pairs_hook=collections.OrderedDict)
+
+        embedding_vals = [float(v) for v in idps_data.values()]
+
+        # Convert them to a stable order (alphabetical by key, etc.):
+        # idps_data = json.load(f, object_pairs_hook=collections.OrderedDict)
+        # embedding_vals = [float(v) for v in idps_data.values()]
+
+        # 4) Build the "metadata" dict from all other CSV columns
         meta = {}
-        for mcol in metadata_columns:
-            if mcol in df.columns:
-                meta[mcol] = row[mcol]
-        record["metadata"] = meta
+        for c in df.columns:
+            if c != "t1_local_path":
+                meta[c] = row[c]
 
-        # Build the embedding array
-        emb_vals = []
-        for ecol in embedding_columns:
-            emb_vals.append(float(row[ecol]))  # ensure it's float
-        record["embedding"] = emb_vals
-
+        # 5) Construct the final record
+        record = {
+            "id": i,
+            "nii_filepath": t1_path,
+            "metadata": meta,
+            "embedding": embedding_vals
+        }
         records.append(record)
 
-    # 4) Write to output_file as JSON
+    # 6) Write the resulting array to JSON
+    os.makedirs(os.path.dirname(output_file) or ".", exist_ok=True)
     with open(output_file, "w") as f:
         json.dump(records, f, indent=2)
-    print(f"[INFO] Wrote {len(records)} items to HF-compatible embeddings file: {output_file}")
+    print(f"[INFO] Wrote {len(records)} items to {output_file}")
 
 
 def main():
@@ -1084,7 +1112,10 @@ def main():
     model_timestamp = int(time.time())
     row_data = {
         "model_name": repo_id,
+        "model_hf_path": None,
+        "model_nickname": None,
         "checkpoint": checkpoint_filename,
+        "checkpoint_hf_path": None,
         "public": False,
         "timestamp": model_timestamp,
         "train_l1": train_res["avg_l1"],

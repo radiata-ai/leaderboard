@@ -1,0 +1,185 @@
+[
+  {
+    "model_name": "/home/ubuntu/brain2vec_PCA",
+    "model_hf_path": "https://huggingface.co/radiata-ai/brain2vec_PCA",
+    "model_nickname": "brain2vec_PCA",
+    "model_type": "embedding",
+    "checkpoint": "/home/ubuntu/brain2vec_PCA/pca_model.joblib",
+    "checkpoint_hf_path": "https://huggingface.co/radiata-ai/brain2vec_PCA/blob/main/pca_model.joblib",
+    "public": true,
+    "timestamp": 1740084522,
+    "train_l1": 0.014713084192603913,
+    "train_perceptual": 0.054272179968110776,
+    "train_ssim": 0.9641731474574503,
+    "train_psnr": 31.7757575068433,
+    "val_l1": 0.032263474190955634,
+    "val_perceptual": 0.20253257326536125,
+    "val_ssim": 0.853338014948123,
+    "val_psnr": 24.336270265503092,
+    "test_l1": 0.03234569263736625,
+    "test_perceptual": 0.20325510926380919,
+    "test_ssim": 0.8539859747827917,
+    "test_psnr": 24.333309642317275,
+    "downstream_train": {
+      "mae_age": 2.5011308193206787,
+      "acc_sex": 0.9954337899543378,
+      "sex_per_class_acc": {
+        "female": 0.9988399071925754,
+        "male": 0.9902048085485308
+      },
+      "acc_diag": 0.99706457925636,
+      "diag_per_class_acc": {
+        "Alzheimers_disease": 0.9680365296803652,
+        "cognitively_normal": 0.9992975061468212
+      }
+    },
+    "downstream_val": {
+      "mae_age": 5.132939338684082,
+      "acc_sex": 0.8731563421828908,
+      "sex_per_class_acc": {
+        "female": 0.9234449760765551,
+        "male": 0.7923076923076923
+      },
+      "acc_diag": 0.967032967032967,
+      "diag_per_class_acc": {
+        "Alzheimers_disease": 0.64,
+        "cognitively_normal": 0.9911504424778761
+      }
+    },
+    "downstream_test": {
+      "mae_age": 5.104937553405762,
+      "acc_sex": 0.9329446064139941,
+      "sex_per_class_acc": {
+        "female": 0.9447236180904522,
+        "male": 0.9166666666666666
+      },
+      "acc_diag": 0.978021978021978,
+      "diag_per_class_acc": {
+        "Alzheimers_disease": 0.8095238095238095,
+        "cognitively_normal": 0.9883381924198251
+      }
+    }
+  },
+  {
+    "model_name": "/home/ubuntu/brain2vec",
+    "model_hf_path": "https://huggingface.co/radiata-ai/brain2vec",
+    "model_nickname": "brain2vec",
+    "model_type": "embedding",
+    "checkpoint": "/home/ubuntu/brain2vec/autoencoder_final.pth",
+    "checkpoint_hf_path": "https://huggingface.co/radiata-ai/brain2vec/blob/main/autoencoder_final.pth",
+    "public": true,
+    "timestamp": 1740165457,
+    "train_l1": 0.04064776000930683,
+    "train_perceptual": 0.21676283749154557,
+    "train_ssim": 0.7707809155247374,
+    "train_psnr": 22.170239381503528,
+    "val_l1": 0.04062377891738664,
+    "val_perceptual": 0.21632050067841352,
+    "val_ssim": 0.7700637289683493,
+    "val_psnr": 22.166401754931286,
+    "test_l1": 0.040919129347817586,
+    "test_perceptual": 0.21911070491750162,
+    "test_ssim": 0.7681349237484117,
+    "test_psnr": 22.121244781418575,
+    "downstream_train": {
+      "mae_age": 2.9598138332366943,
+      "acc_sex": 0.9968387776606955,
+      "sex_per_class_acc": {
+        "female": 0.9965197215777262,
+        "male": 0.9973285841495992
+      },
+      "acc_diag": 0.9980430528375733,
+      "diag_per_class_acc": {
+        "Alzheimers_disease": 0.9817351598173516,
+        "cognitively_normal": 0.9992975061468212
+      }
+    },
+    "downstream_val": {
+      "mae_age": 7.3537678718566895,
+      "acc_sex": 0.8259587020648967,
+      "sex_per_class_acc": {
+        "female": 0.8755980861244019,
+        "male": 0.7461538461538462
+      },
+      "acc_diag": 0.9560439560439561,
+      "diag_per_class_acc": {
+        "Alzheimers_disease": 0.64,
+        "cognitively_normal": 0.9793510324483776
+      }
+    },
+    "downstream_test": {
+      "mae_age": 6.484442710876465,
+      "acc_sex": 0.7959183673469388,
+      "sex_per_class_acc": {
+        "female": 0.7788944723618091,
+        "male": 0.8194444444444444
+      },
+      "acc_diag": 0.967032967032967,
+      "diag_per_class_acc": {
+        "Alzheimers_disease": 0.9047619047619048,
+        "cognitively_normal": 0.9708454810495627
+      }
+    }
+  },
+  {
+    "model_name": "GM_IDPs",
+    "model_hf_path": null,
+    "model_nickname": "GM_IDPs",
+    "model_type": "IDP",
+    "checkpoint": null,
+    "checkpoint_hf_path": null,
+    "public": true,
+    "timestamp": 1740207066,
+    "train_l1": null,
+    "train_perceptual": null,
+    "train_ssim": null,
+    "train_psnr": null,
+    "val_l1": null,
+    "val_perceptual": null,
+    "val_ssim": null,
+    "val_psnr": null,
+    "test_l1": null,
+    "test_perceptual": null,
+    "test_ssim": null,
+    "test_psnr": null,
+    "downstream_train": {
+      "mae_age": 6.077644389681453,
+      "acc_sex": 0.8686336494555673,
+      "sex_per_class_acc": {
+        "female": 0.9060324825986079,
+        "male": 0.811219946571683
+      },
+      "acc_diag": 0.9651011089367254,
+      "diag_per_class_acc": {
+        "Alzheimers_disease": 0.8036529680365296,
+        "cognitively_normal": 0.9775201966982789
+      }
+    },
+    "downstream_val": {
+      "mae_age": 6.993507261473169,
+      "acc_sex": 0.855457227138643,
+      "sex_per_class_acc": {
+        "female": 0.8755980861244019,
+        "male": 0.823076923076923
+      },
+      "acc_diag": 0.9478021978021978,
+      "diag_per_class_acc": {
+        "Alzheimers_disease": 0.6,
+        "cognitively_normal": 0.9734513274336283
+      }
+    },
+    "downstream_test": {
+      "mae_age": 7.121220391276279,
+      "acc_sex": 0.8688046647230321,
+      "sex_per_class_acc": {
+        "female": 0.8894472361809045,
+        "male": 0.8402777777777778
+      },
+      "acc_diag": 0.967032967032967,
+      "diag_per_class_acc": {
+        "Alzheimers_disease": 0.7142857142857143,
+        "cognitively_normal": 0.9825072886297376
+      }
+    }
+  }
+]
